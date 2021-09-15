@@ -30,6 +30,7 @@ var functions = template.FuncMap{}
 var templateFS embed.FS
 
 func (app *application) addDefaultData(td *templateData, r *http.Request) *templateData {
+	td.API = app.config.api
 	return td
 }
 
@@ -58,7 +59,7 @@ func (app *application) renderTemplate(w http.ResponseWriter, r *http.Request, p
 	}
 
 	td = app.addDefaultData(td, r)
-
+	app.infoLog.Printf("TEMPLATE DATA: %+v", td)
 	err = t.Execute(w, td)
 	if err != nil {
 		app.errorLog.Println(err)

@@ -56,12 +56,30 @@ Virtual Terminal
     const processing = document.getElementById("processing-payment");
 
 
-    stripe = Stripe('pk_test_51JYGx3ByDta618GrFT7ASeteYaoTvRjkq3E5VqDimRxo5hprFhacY7EBxWooft2sKlO8AUa2MKgELbWmb7uhllfi00NoFUiz3O');
+    stripe = Stripe({{index .StringMap "publishable_key"}});
 
     function hidePayButton() {
       payButton.classList.add("d-none");
       processing.classList.remove("d-none");
     }
+    function showPayButtons() {
+      payButton.classList.remove("d-none");
+      processing.classList.add("d-none");
+    }
+
+    function showCardError(message) {
+      cardMessages.classList.remove("d-none");
+      cardMessages.classList.remove("alert-success");
+      cardMessages.classList.add("alert-danger");
+      cardMessages.innerText = message;
+    }
+    function showCardSuccess(message) {
+      cardMessages.classList.remove("d-none");
+      cardMessages.classList.add("alert-success");
+      cardMessages.classList.remove("alert-danger");
+      cardMessages.innerText = "Transaction successful";
+    }
+
 
     async function val() {
       let form = document.getElementById("charge_form");
@@ -91,13 +109,49 @@ Virtual Terminal
         body: JSON.stringify(payload),
       }
       
-      const response = await fetch("http://localhost:4001/api/payment-intent", requestOptions);
+      const response = await fetch("{{.API}}/api/payment-intent", requestOptions);
       const data = await response.text();
       try {
         const paymentIntent = JSON.parse(data);
         console.log(paymentIntent);
+
+        const result = await stripe.confirmCardPayment(paymentIntent.client_secret, {
+          payment_method: {
+              card: card,
+              billing_details: {
+                name: document.getElementById("cardholder-name").value,
+              }
+          }
+        })
+
+        if (result.error) {
+          // Something went wrong here, or card got declined. 
+          showCardError(result.error.message);
+          showPayButtons();
+          return 
+        } 
+
+        if (result.paymentIntent) {
+          if (result.paymentIntent.status === 'succeeded') {
+            // we charged the card. 
+            document.getElementById("payment_method").value = result.paymentIntent.payment_method_types[0];
+            document.getElementById("payment_intent").value = result.paymentIntent.id;
+            document.getElementById("payment_amount").value = result.paymentIntent.amount;
+            document.getElementById("payment_currency").value = result.paymentIntent.currency;
+            processing.classList.add("d-none");
+
+            showCardSuccess();
+            // Would submit the form here.
+            document.getElementById("charge_form").submit();
+          }
+        }
+
+
       } catch (e) {
         console.log(e);
+
+        showCardError("Invalid response from payment gateway");
+        showPayButtons();
       }
     }
 

@@ -35,7 +35,7 @@ func (c *Card) CreatePaymentIntent(currency string, Amount int) (*stripe.Payment
 	// can add more infor to parames like below
 	// params.AddMetadata("key", "value")
 
-	pi, err := paymentintent.New(params)
+	pi, err := paymentintent.New(params) // payment intent comes  from stripe
 	if err != nil {
 		msg := ""
 

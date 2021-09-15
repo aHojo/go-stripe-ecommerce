@@ -53,7 +53,7 @@ func main() {
 
 	flag.IntVar(&cfg.port, "port", 8080, "listen port")
 	flag.StringVar(&cfg.env, "env", "development", "application environment")
-	flag.StringVar(&cfg.api, "api", "http://localhost:4000", "api url")
+	flag.StringVar(&cfg.api, "api", "http://localhost:4001", "api url")
 
 	flag.Parse()
 
