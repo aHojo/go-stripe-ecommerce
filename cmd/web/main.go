@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/ahojo/go-stripe-ecommerce/internal/driver"
+	"github.com/ahojo/go-stripe-ecommerce/internal/models"
 	"html/template"
 	"log"
 	"net/http"
@@ -32,6 +34,7 @@ type application struct {
 	errorLog      *log.Logger
 	templateCache map[string]*template.Template
 	version       string
+	DB models.DBModel
 }
 
 func (app *application) serve() error {
@@ -54,6 +57,7 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 8080, "listen port")
 	flag.StringVar(&cfg.env, "env", "development", "application environment")
 	flag.StringVar(&cfg.api, "api", "http://localhost:4001", "api url")
+	flag.StringVar(&cfg.db.dsn, "dsn", "root:password@tcp(localhost:3306)/widgets?parseTime=true&tls=false", "DSN")
 
 	flag.Parse()
 
@@ -63,6 +67,11 @@ func main() {
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
+	conn, err := driver.OpenDB(cfg.db.dsn)
+	if err != nil {
+		errorLog.Fatal(err)
+	}
+	defer conn.Close()
 	tc := make(map[string]*template.Template)
 
 	app := &application{
@@ -71,9 +80,10 @@ func main() {
 		errorLog:      errorLog,
 		templateCache: tc,
 		version:       version,
+		DB: models.DBModel{DB: conn},
 	}
 
-	err := app.serve()
+	err = app.serve()
 	if err != nil {
 		errorLog.Fatal(err)
 	}
