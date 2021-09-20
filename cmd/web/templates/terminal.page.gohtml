@@ -11,8 +11,8 @@ Virtual Terminal
 
   <form action="/payment-succeeded" method="post" name="charge_form" id="charge_form" class="d-block needs-validation charge-form" autocomplete="off" novalidate="">
     <div class="mb-3">
-      <label for="amount" class="form-label">Amount</label>
-      <input type="text" class="form-control" id="amount" name="amount" placeholder="Amount" required="" autocomplete="amount-new">
+      <label for="charge_amount" class="form-label">Amount</label>
+      <input type="text" class="form-control" id="charge_amount" name="charge_amount" placeholder="Amount" required="" autocomplete="charge_amount-new">
     </div>
     <div class="mb-3">
       <label for="cardholder-name" class="form-label">Cardholder Name</label>
@@ -38,6 +38,7 @@ Virtual Terminal
       </div>
     </div>
 
+    <input type ="hidden" name="amount" id="amount" />
     <input type ="hidden" name="payment_intent" id="payment_intent" />
     <input type ="hidden" name="payment_method" id="payment_method" />
     <input type ="hidden" name="payment_amount" id="payment_amount" />
@@ -47,5 +48,15 @@ Virtual Terminal
 
 
 {{define "js"}}
+<script>
+  document.getElementById('charge_amount', function(event) {
+    if (event.target.value !== "") {
+      document.getElementById('amount').value = event.target.value * 100;
+      return
+    }
+
+    document.getElementById('amount').value = 0;
+  })
+</script>
 {{ template "stripe-js" .}}
 {{end}}

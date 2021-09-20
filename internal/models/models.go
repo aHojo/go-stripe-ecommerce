@@ -40,6 +40,7 @@ type Order struct {
 	ID            int       `json:"id"`
 	WidgetID      int       `json:"widget_id"`
 	TransactionID int       `json:"transaction_id"`
+	CustomerID    int       `json:"customer_id"`
 	StatusID      int       `json:"status_id"`
 	Quantity      int       `json:"quantity"`
 	Amount        int       `json:"amount"`
@@ -78,10 +79,18 @@ type Transaction struct {
 
 type User struct {
 	ID        int       `json:"id"`
-	firstName string    `json:"first_name"`
-	lastName  string    `json:"last_name"`
-	email     string    `json:"email"`
-	password  string    `json:"password"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Password  string    `json:"password"`
+	CreatedAt time.Time `json:"-"`
+	UpdatedAt time.Time `json:"-"`
+}
+type Customer struct {
+	ID        int       `json:"id"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"-"`
 	UpdatedAt time.Time `json:"-"`
 }
@@ -94,7 +103,7 @@ func (m *DBModel) GetWidget(id int) (Widget, error) {
 	query := `SELECT id, name, description, inventory_level, price, coalesce(image, ''),
 				created_at, updated_at 
 			FROM 
-			    widgets WHERE id = ?`
+				widgets WHERE id = ?`
 
 	row := m.DB.QueryRowContext(ctx, query, id)
 	err := row.Scan(
@@ -106,10 +115,72 @@ func (m *DBModel) GetWidget(id int) (Widget, error) {
 		&widget.Image,
 		&widget.CreatedAt,
 		&widget.UpdatedAt,
-		)
+	)
 	if err != nil {
 		return widget, err
 	}
 
 	return widget, nil
+}
+
+// InsertTransaction inserts a transaction into the database and returns it's id.
+func (m *DBModel) InsertTransaction(txn Transaction) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `INSERT INTO transactions
+							(amount, currency, last_four, bank_return_code,transaction_status_id, created_at, updated_at)
+						VALUES
+							(?,?,?,?,?,?,?)`
+	args := []interface{}{
+		txn.Amount,
+		txn.Currency,
+		txn.LastFour,
+		txn.BankReturnCode,
+		txn.TransactionStatusID,
+		time.Now(),
+		time.Now(),
+	}
+	result, err := m.DB.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(id), nil
+}
+
+// InsertOrder inserts a transaction into the database and returns it's id.
+func (m *DBModel) InsertOrder(order Order) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `INSERT INTO orders
+							(widget_id, transaction_id, status_id, quantity,amount, created_at, updated_at)
+						VALUES
+							(?,?,?,?,?,?,?)`
+	args := []interface{}{
+		order.WidgetID,
+		order.TransactionID,
+		order.StatusID,
+		order.Quantity,
+		order.Amount,
+		time.Now(),
+		time.Now(),
+	}
+	result, err := m.DB.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(id), nil
 }
