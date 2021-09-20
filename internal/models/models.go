@@ -73,6 +73,8 @@ type Transaction struct {
 	LastFour            string    `json:"last_four"`
 	BankReturnCode      string    `json:"bank_return_code"`
 	TransactionStatusID int       `json:"transaction_status_id"`
+	ExpiryMonth					int 			`json:"expiry_month"`
+	ExpiryYear					int 			`json:"expiry_year"`
 	CreatedAt           time.Time `json:"-"`
 	UpdatedAt           time.Time `json:"-"`
 }
@@ -160,19 +162,50 @@ func (m *DBModel) InsertOrder(order Order) (int, error) {
 	defer cancel()
 
 	query := `INSERT INTO orders
-							(widget_id, transaction_id, status_id, quantity,amount, created_at, updated_at)
+							(widget_id, transaction_id, status_id, customer_id, quantity,amount, created_at, updated_at)
 						VALUES
-							(?,?,?,?,?,?,?)`
+							(?,?,?,?,?,?,?,?)`
 	args := []interface{}{
 		order.WidgetID,
 		order.TransactionID,
 		order.StatusID,
+		order.CustomerID,
 		order.Quantity,
 		order.Amount,
 		time.Now(),
 		time.Now(),
 	}
 	result, err := m.DB.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(id), nil
+}
+// InsertCustomer inserts a customer into the database and returns it's id.
+func (m *DBModel) InsertCustomer(c Customer) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `INSERT INTO customers
+							(first_name, last_name, email, created_at, updated_at)
+						VALUES
+							(?,?,?,?,?)`
+	args := []interface{}{
+		c.FirstName,
+		c.LastName,
+		c.Email,
+		time.Now(),
+		time.Now(),
+	}
+
+	result, err := m.DB.ExecContext(ctx, query, args...)
+	
 	if err != nil {
 		return 0, err
 	}
