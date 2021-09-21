@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"html/template"
@@ -57,6 +58,8 @@ func (app *application) serve() error {
 }
 
 func main() {
+	gob.Register(TransactionData{})
+
 	var cfg config
 
 	flag.IntVar(&cfg.port, "port", 8080, "listen port")

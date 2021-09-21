@@ -73,8 +73,10 @@ type Transaction struct {
 	LastFour            string    `json:"last_four"`
 	BankReturnCode      string    `json:"bank_return_code"`
 	TransactionStatusID int       `json:"transaction_status_id"`
-	ExpiryMonth					int 			`json:"expiry_month"`
-	ExpiryYear					int 			`json:"expiry_year"`
+	ExpiryMonth         int       `json:"expiry_month"`
+	ExpiryYear          int       `json:"expiry_year"`
+	PaymentIntent       string    `json:"payment_intent"`
+	PaymentMethod       string    `json:"payment_method"`
 	CreatedAt           time.Time `json:"-"`
 	UpdatedAt           time.Time `json:"-"`
 }
@@ -131,15 +133,19 @@ func (m *DBModel) InsertTransaction(txn Transaction) (int, error) {
 	defer cancel()
 
 	query := `INSERT INTO transactions
-							(amount, currency, last_four, bank_return_code,transaction_status_id, created_at, updated_at)
+							(amount, currency, last_four, bank_return_code,transaction_status_id, expiry_month, expiry_year, payment_intent, payment_method, created_at, updated_at)
 						VALUES
-							(?,?,?,?,?,?,?)`
+							(?,?,?,?,?,?,?,?,?, ?,?)`
 	args := []interface{}{
 		txn.Amount,
 		txn.Currency,
 		txn.LastFour,
 		txn.BankReturnCode,
 		txn.TransactionStatusID,
+		txn.ExpiryMonth,
+		txn.ExpiryYear,
+		txn.PaymentIntent,
+		txn.PaymentMethod,
 		time.Now(),
 		time.Now(),
 	}
@@ -187,6 +193,7 @@ func (m *DBModel) InsertOrder(order Order) (int, error) {
 
 	return int(id), nil
 }
+
 // InsertCustomer inserts a customer into the database and returns it's id.
 func (m *DBModel) InsertCustomer(c Customer) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -205,7 +212,7 @@ func (m *DBModel) InsertCustomer(c Customer) (int, error) {
 	}
 
 	result, err := m.DB.ExecContext(ctx, query, args...)
-	
+
 	if err != nil {
 		return 0, err
 	}
