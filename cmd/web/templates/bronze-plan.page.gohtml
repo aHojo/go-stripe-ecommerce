@@ -5,6 +5,182 @@ Bronze Plan
 {{end}}
 
 {{define "content"}}
-<h2 class="mt-5">Bronze Plan</h2>
-<hr/>
+    <div class="alert alert-danger text-center d-none" id="card-messages"></div>
+    {{ $widget := index .Data "widget"}}
+
+    <h2 class="mt-3 text-center">Bronze Plan</h2>
+    <hr />
+
+    <form action="/payment-succeeded-temp" method="post" name="charge_form" id="charge_form" class="d-block needs-validation charge-form" autocomplete="off" novalidate="">
+        <input type="hidden" name="product_id" value="{{$widget.ID}}">
+        <input type="hidden" id="amount" name="amount" value="{{$widget.Price}}">
+        <h3 class="mt-2 text-center mb-3">{{formatCurrency $widget.Price}}/month</h3>
+        <p>{{$widget.Description}}</p>
+        <hr />
+
+        <div class="mb-3">
+            <label for="first-name" class="form-label">First Name</label>
+            <input type="text" class="form-control" id="first-name" name="first-name" placeholder="Name" required="" autocomplete="first-new">
+        </div>
+        <div class="mb-3">
+            <label for="last-name" class="form-label">Last Name</label>
+            <input type="text" class="form-control" id="last-name" name="last-name" placeholder="Name" required="" autocomplete="last-new">
+        </div>
+        <div class="mb-3">
+            <label for="cardholder-name" class="form-label">Name on Card</label>
+            <input type="text" class="form-control" id="cardholder-name" name="cardholder-name" placeholder="Name" required="" autocomplete="cardholder-new">
+        </div>
+        <div class="mb-3">
+            <label for="email" class="form-label">Cardholder Email</label>
+            <input type="email" class="form-control" id="cardholder-email" name="cardholder-email" placeholder="Email" required="" autocomplete="email-new">
+        </div>
+        <!-- card number will be built by strip -->
+        <div class="mb-3">
+            <label for="card-element" class="form-label">Credit Card</label>
+            <div id="card-element" class="form-control"></div>
+            <div class="alert-danger text-center" id="card-errors" role="alert"></div>
+            <div class="alert-success text-center" id="card-success" role="alert"></div>
+        </div>
+        <hr/>
+        <a id="pay-button" class="btn btn-primary btn-lg btn-block" href="javascript:void(0)" onClick="val()">Pay {{formatCurrency $widget.Price}}/month</a>
+
+        <div id="processing-payment" class="text-center d-none">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+
+        <input type ="hidden" name="payment_intent" id="payment_intent" />
+        <input type ="hidden" name="payment_method" id="payment_method" />
+        <input type ="hidden" name="payment_amount" id="payment_amount" />
+        <input type ="hidden" name="payment_currency" id="payment_currency" />
+    </form>
+
+{{end}}
+
+{{define "js"}}
+    {{ $widget := index .Data "widget"}}
+    <script src="https://js.stripe.com/v3/"></script>
+
+    <script>
+        let card;
+        let stripe;
+        const cardMessages = document.getElementById("card-messages");
+        const payButton = document.getElementById("pay-button");
+        const processing = document.getElementById("processing-payment");
+
+
+        stripe = Stripe({{.StripePublishableKey }});
+
+        function hidePayButton() {
+            payButton.classList.add("d-none");
+            processing.classList.remove("d-none");
+        }
+
+        function showPayButtons() {
+            payButton.classList.remove("d-none");
+            processing.classList.add("d-none");
+        }
+
+        function showCardError(message) {
+            cardMessages.classList.remove("d-none");
+            cardMessages.classList.remove("alert-success");
+            cardMessages.classList.add("alert-danger");
+            cardMessages.innerText = message;
+        }
+
+        function showCardSuccess(message) {
+            cardMessages.classList.remove("d-none");
+            cardMessages.classList.add("alert-success");
+            cardMessages.classList.remove("alert-danger");
+            cardMessages.innerText = "Transaction successful";
+        }
+
+        function val() {
+            let form = document.getElementById("charge_form");
+            if (form.checkValidity() === false) {
+                this.event.preventDefault();
+                this.event.stopPropagation();
+                form.classList.add('was-validated');
+                return
+            }
+
+            form.classList.add('was-validated');
+            hidePayButton();
+
+            let amountToCharge = document.getElementById("amount").value; // need a whole number
+            const {value} = document.getElementById("cardholder-email");
+            stripe.createPaymentMethod({
+                type: 'card',
+                card: card,
+                billing_details: {
+                  email: value
+                },
+            }).then(stripePaymentMethodHandler);
+        }
+
+        function stripePaymentMethodHandler(result) {
+            if (result.error) {
+                showCardError(result.error.message);
+                return
+            }
+
+            // create a customer and subscribe to the plan.
+            const payload = {
+                plan: '{{$widget.PlanID}}',
+                payment_method: result.paymentMethod.id,
+                email: document.getElementById("cardholder-email").value,
+                last_four: result.paymentMethod.card.last4,
+            }
+
+            const requestOptions = {
+                method: 'post',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            }
+
+            fetch("{{.API}}/api/create-customer-and-subscribe-to-plan", requestOptions)
+            .then(response => response.json())
+            .then(function(data) {
+                console.log(data)
+                processing.classList.add("d-none")
+                // set hidden vars
+                //submit the form
+            })
+        }
+
+        (function () {
+// create stripe and elements
+            const elements = stripe.elements();
+
+            const style = {
+                base: {
+                    fontSize: '16px',
+                    lineHeight: '24px',
+                }
+            }
+
+// card entry
+            card = elements.create('card', {
+                style,
+                hidePostalCode: true,
+            })
+            card.mount("#card-element");
+
+// check for input errors
+            card.addEventListener('change', (event) => {
+                const errrorDiv = document.getElementById('card-errors');
+                if (event.error) {
+                    errrorDiv.classList.remove('d-none');
+                    errrorDiv.textContent = event.error.message;
+                } else {
+                    errrorDiv.classList.add('d-none');
+                    errrorDiv.textContent = '';
+                }
+            })
+        })();
+    </script>
 {{end}}
