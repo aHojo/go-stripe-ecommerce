@@ -2,20 +2,30 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/go-chi/chi/v5"
 	"net/http"
 	"strconv"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/stripe/stripe-go/v72"
 
 	"github.com/ahojo/go-stripe-ecommerce/internal/cards"
+	"github.com/ahojo/go-stripe-ecommerce/internal/models"
 )
 
 type stripePayload struct {
-	Currency string `json:"currency"`
-	Amount   string `json:"amount"`
+	Currency      string `json:"currency"`
+	Amount        string `json:"amount"`
 	PaymentMethod string `json:"payment_method"`
-	Email string `json:"email"`
-	LastFour string `json:"last_four"`
-	Plan string `json:"plan"`
+	Email         string `json:"email"`
+	LastFour      string `json:"last_four"`
+	ExpiryMonth   int `json:"exp_month"`
+	ExpiryYear    int `json:"exp_year"`
+	Plan          string `json:"plan"`
+	CardBrand     string `json:"card_brand"`
+	ProductID     string `json:"product_id"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
 }
 
 type jsonResponse struct {
@@ -62,7 +72,7 @@ func (app *application) GetPaymentIntent(w http.ResponseWriter, r *http.Request)
 	} else {
 
 		j := jsonResponse{
-			OK: false,
+			OK:      false,
 			Message: msg,
 			Content: "",
 		}
@@ -78,7 +88,7 @@ func (app *application) GetPaymentIntent(w http.ResponseWriter, r *http.Request)
 
 }
 
-func (app *application) GetWidgetByID(w http.ResponseWriter, r *http.Request){
+func (app *application) GetWidgetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	widgetID, _ := strconv.Atoi(id)
 
@@ -109,12 +119,84 @@ func (app *application) CreateCustomerAndSubscribeToPlan(w http.ResponseWriter, 
 
 	app.infoLog.Println(data.Email, data.LastFour, data.PaymentMethod, data.Plan)
 
-	okay := true
-	msg := ""
+	card := cards.Card{
+		Secret:   app.config.stripe.secret,
+		Key:      app.config.stripe.key,
+		Currency: data.Currency,
+	}
+
+	var okay bool = true
+	var subscription *stripe.Subscription
+	transactionMessage := "Transaction successful"
+
+	stripeCustomer, msg, err := card.CreateCustomer(data.PaymentMethod, data.Email)
+	if err != nil {
+		app.errorLog.Println(err)
+		okay = false
+		transactionMessage = msg
+	}
+
+	if okay {
+		subscription, err = card.SubscribeToPlan(stripeCustomer, data.Plan, data.Email, data.LastFour, "")
+		if err != nil {
+			app.errorLog.Println(err)
+			okay = false
+		}
+
+		app.infoLog.Println("Subscription id is", subscription.ID)
+	}
+
+	if okay {
+		productID, _ := strconv.Atoi(data.ProductID)
+		customerID, err := app.SaveCustomer(data.FirstName, data.LastName, data.Email)
+		if err != nil {
+			app.errorLog.Println(err)
+			transactionMessage = "Error subscribing customer"
+		}
+
+		// create a new transaction
+		amount, _ := strconv.Atoi(data.Amount)
+		// expiryMonth, _ := strconv.Atoi(data.ExpiryMonth)
+		// expiryYear, _ := strconv.Atoi(data.ExpiryYear)
+
+		transaction := models.Transaction{
+			Amount:              amount,
+			Currency:            "cad",
+			LastFour:            data.LastFour,
+			ExpiryMonth:         data.ExpiryMonth,
+			ExpiryYear:          data.ExpiryYear,
+			TransactionStatusID: 2,
+		}
+
+		transactionID, err := app.SaveTransaction(transaction)
+		if err != nil {
+			app.errorLog.Println(err)
+			return
+		}
+
+		// create an order
+		order := models.Order{
+			WidgetID:      productID,
+			TransactionID: transactionID,
+			CustomerID:    customerID,
+			StatusID:      1,
+			Quantity:      1,
+			Amount:        amount,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}
+
+		_, err = app.SaveOrder(order)
+		if err != nil {
+			app.errorLog.Println(err)
+			return
+		}
+	}
+	// msg := ""
 
 	resp := jsonResponse{
-		OK: okay,
-		Message: msg,
+		OK:      okay,
+		Message: transactionMessage,
 	}
 
 	out, err := json.MarshalIndent(resp, "", " ")
@@ -125,4 +207,42 @@ func (app *application) CreateCustomerAndSubscribeToPlan(w http.ResponseWriter, 
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(out)
+}
+
+// SaveCustomer saves a customer and returns it's id.
+func (app *application) SaveCustomer(firstName, lastName, email string) (int, error) {
+	customer := models.Customer{
+		FirstName: firstName,
+		LastName:  lastName,
+		Email:     email,
+	}
+
+	id, err := app.DB.InsertCustomer(customer)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}
+
+// SaveTransaction saves a customer and returns it's id.
+func (app *application) SaveTransaction(txn models.Transaction) (int, error) {
+
+	id, err := app.DB.InsertTransaction(txn)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}
+
+// SaveOrder saves a customer and returns it's id.
+func (app *application) SaveOrder(order models.Order) (int, error) {
+
+	id, err := app.DB.InsertOrder(order)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
