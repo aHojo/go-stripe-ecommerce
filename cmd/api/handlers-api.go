@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -245,4 +246,50 @@ func (app *application) SaveOrder(order models.Order) (int, error) {
 	}
 
 	return id, nil
+}
+
+func (app *application) CreateAuthToken(w http.ResponseWriter, r *http.Request) {
+	var userInput struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	err := app.readJSON(w,r,&userInput)
+	if err != nil {
+		app.badRequest(w,r,err)
+		return 
+	}
+
+	// get the user from the database by email; send error if invalid email
+	user, err := app.DB.GetUserByEmail(userInput.Email)
+	if err != nil {
+		app.invalidCredentials(w)
+		return
+	}
+	//validate the password; send error if invalid password
+	validPass, err := app.passwordMatches(user.Password,userInput.Password)
+	if err != nil {
+		app.invalidCredentials(w)
+		return
+	}
+	if !validPass { 
+		app.invalidCredentials(w)
+		return
+	}
+	// generate a token
+
+	// send response
+
+	var payLoad struct {
+		Error bool `json:"error"`
+		Message string `json:"message"`
+	}
+	payLoad.Error = false
+	payLoad.Message = fmt.Sprintf("Success --- Username %s Passowrd %s", userInput.Email, userInput.Password)
+
+	err = app.writeJSON(w, http.StatusOK, payLoad)
+	if err != nil {
+		app.badRequest(w,r,err)
+		return
+	}
 }
