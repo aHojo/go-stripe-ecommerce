@@ -20,8 +20,8 @@ type stripePayload struct {
 	PaymentMethod string `json:"payment_method"`
 	Email         string `json:"email"`
 	LastFour      string `json:"last_four"`
-	ExpiryMonth   int `json:"exp_month"`
-	ExpiryYear    int `json:"exp_year"`
+	ExpiryMonth   int    `json:"exp_month"`
+	ExpiryYear    int    `json:"exp_year"`
 	Plan          string `json:"plan"`
 	CardBrand     string `json:"card_brand"`
 	ProductID     string `json:"product_id"`
@@ -254,10 +254,10 @@ func (app *application) CreateAuthToken(w http.ResponseWriter, r *http.Request) 
 		Password string `json:"password"`
 	}
 
-	err := app.readJSON(w,r,&userInput)
+	err := app.readJSON(w, r, &userInput)
 	if err != nil {
-		app.badRequest(w,r,err)
-		return 
+		app.badRequest(w, r, err)
+		return
 	}
 
 	// get the user from the database by email; send error if invalid email
@@ -267,29 +267,48 @@ func (app *application) CreateAuthToken(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	//validate the password; send error if invalid password
-	validPass, err := app.passwordMatches(user.Password,userInput.Password)
+	validPass, err := app.passwordMatches(user.Password, userInput.Password)
 	if err != nil {
 		app.invalidCredentials(w)
 		return
 	}
-	if !validPass { 
+	if !validPass {
 		app.invalidCredentials(w)
 		return
 	}
-	// generate a token
+	// generate the token
+	token, err := models.GenerateToken(user.ID, 24*time.Hour, models.ScopeAuthentication)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	// Save to the database
+	err = app.DB.InsertToken(token, user)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
 
 	// send response
 
-	var payLoad struct {
-		Error bool `json:"error"`
-		Message string `json:"message"`
+	var payload struct {
+		Error   bool          `json:"error"`
+		Message string        `json:"message"`
+		Token   *models.Token `json:"authentication_token"`
 	}
-	payLoad.Error = false
-	payLoad.Message = fmt.Sprintf("Success --- Username %s Passowrd %s", userInput.Email, userInput.Password)
+	payload.Error = false
+	payload.Message = fmt.Sprintf("token for %s created", userInput.Email)
+	payload.Token = token
 
-	err = app.writeJSON(w, http.StatusOK, payLoad)
+	err = app.writeJSON(w, http.StatusOK, payload)
 	if err != nil {
-		app.badRequest(w,r,err)
+		app.badRequest(w, r, err)
 		return
 	}
+}
+
+
+func (app *application) CheckAuthentication(w http.ResponseWriter, r *http.Request) {
+	app.invalidCredentials(w);
 }

@@ -6,9 +6,8 @@ Login
 
 {{ define "content" }}
     <form action="" method="post" name="login_form" id="login_form" class="d-block needs-validation charge-form" autocomplete="off" novalidate="">
+        <div class="alert alert-danger text-center d-none" id="loggedIn"></div>
         <h3 class="mt-2 text-center mb-3">Login</h3>
-
-
         <div class="mb-3">
             <label for="email" class="form-label">Email</label>
             <input type="email" class="form-control" id="email" name="email" placeholder="Email" required="" autocomplete="email-new">
@@ -24,7 +23,22 @@ Login
 
 
 {{ define "js"}}
-   <script>
+<script>
+   const loggedIn = document.querySelector('#loggedIn');
+   function showError(message) {
+            loggedIn.classList.remove("d-none");
+            loggedIn.classList.remove("alert-success");
+            loggedIn.classList.add("alert-danger");
+            loggedIn.innerText = message;
+        }
+
+        function showSuccess(message) {
+            loggedIn.classList.remove("d-none");
+            loggedIn.classList.add("alert-success");
+            loggedIn.classList.remove("alert-danger");
+            loggedIn.innerText = "Login successful";
+        }
+
         async function val() {
             let form = document.getElementById("login_form");
             if (form.checkValidity() === false) {
@@ -52,14 +66,22 @@ Login
                 body: JSON.stringify(payload),
             }
 
-          try {
+        try {
             const response = await fetch("{{.API}}/api/authenticate", requestOptions);
             const data = await response.json();
-            console.log(data);
-          } catch (error) {
+            if (data.error === false) {
+                localStorage.setItem("token", data.authentication_token.token);
+                localStorage.setItem("expiry", data.authentication_token.expiry);
+                showSuccess();
+                console.log("Got Here")
+                location.href = "/";
+            } else {
+                showError(data.message);
+            }
+        } catch (error) {
             console.log(error);
-          }
-              
+        }
+
         }
   </script>
 {{ end }}
