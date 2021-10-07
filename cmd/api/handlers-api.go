@@ -290,6 +290,11 @@ func (app *application) CreateAuthToken(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	token, err := models.GenerateToken(user.ID, time.Hour * 24, models.ScopeAuthentication)
+	if err != nil {
+		app.badRequest(w,r,err)
+		return
+	}
 	// send response
 
 	var payload struct {
