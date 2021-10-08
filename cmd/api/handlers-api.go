@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -290,11 +292,11 @@ func (app *application) CreateAuthToken(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	token, err := models.GenerateToken(user.ID, time.Hour * 24, models.ScopeAuthentication)
-	if err != nil {
-		app.badRequest(w,r,err)
-		return
-	}
+	// token, err = models.GenerateToken(user.ID, time.Hour * 24, models.ScopeAuthentication)
+	// if err != nil {
+	// 	app.badRequest(w,r,err)
+	// 	return
+	//}
 	// send response
 
 	var payload struct {
@@ -313,7 +315,47 @@ func (app *application) CreateAuthToken(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (app *application) authenticateToken(r *http.Request) (*models.User, error) {
 
+	authorizationHeader := r.Header.Get("Authorization")
+	if authorizationHeader == "" {
+		return nil, errors.New("no authorization header recieved")
+	}
+
+	headerParts := strings.Split(authorizationHeader, " ");
+	if headerParts[0] != "Bearer" || len(headerParts) != 2 {
+		return nil, errors.New("no authorization header recieved")
+	}
+
+	token := headerParts[1]
+	if len(token) != 26 {
+		return nil, errors.New("Auth token wrong size");
+	}
+
+	// Get the user from the tokens table.
+	user, err := app.DB.GetUserForToken(token)
+	if err != nil {
+		return nil, errors.New("No matching user found")
+	}
+
+	return user, nil
+}
 func (app *application) CheckAuthentication(w http.ResponseWriter, r *http.Request) {
-	app.invalidCredentials(w);
+	// Validate the token and get the associated user.
+	user, err := app.authenticateToken(r)
+	if err != nil {
+		app.invalidCredentials(w)
+		return
+	}
+
+	// valid user
+	var payload struct {
+		Error   bool   `json:"Error"`
+		Message string `json:"message"`
+	}
+	payload.Error = false
+	payload.Message = fmt.Sprintf("Authenticated uesr %s", user.Email)
+
+	app.writeJSON(w, http.StatusOK, payload)
+
 }
